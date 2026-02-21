@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+venv/
+.env
+.env.*
+
+# VSCode
+.vscode/
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Mac
+.DS_Store
+
+# Logs
+*.log
+
+# Database
+*.db
+
+# Docker volume
+postgres_data/
+
+# Pytest
+.pytest_cache/
+
+# Alembic
+alembic/versions/__pycache__/
