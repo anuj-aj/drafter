@@ -25,6 +25,32 @@ graph TD
 
 The LLM is bound to the `propose_update` tool. When called, it saves the proposal as a Draft in the database.
 
+## Agent Graph (Full Data Flow)
+
+```mermaid
+flowchart TB
+    UserInput([User Input]) --> AgentNode["Agent Node (LLM + Tools)"]
+    AgentNode --> ShouldContinue{Tool Call?}
+    ShouldContinue -- No --> End([End / Return Response])
+    ShouldContinue -- Yes --> ToolsNode["Tools Node"]
+    ToolsNode --> ProposeUpdate["propose_update\n(Non-destructive)"]
+    ToolsNode --> UpdateTool["update\n(Destructive, only on apply)"]
+    ProposeUpdate --> DraftDB[(Draft Table)]
+    UpdateTool --> RevisionDB[(Revision Table)]
+    UpdateTool --> DraftDB
+    ProposeUpdate -.-> AgentNode
+    UpdateTool -.-> AgentNode
+    DraftDB -.-> DocumentsDB[(Documents Table)]
+    RevisionDB -.-> DocumentsDB
+    UpdateTool --> DocumentsDB
+    DocumentsDB -.-> AgentNode
+    End:::endstyle
+
+    classDef tool fill:#f3e5f5;
+    class ProposeUpdate,UpdateTool tool;
+    classDef endstyle fill:#c8e6c9,stroke:#333,stroke-width:2;
+```
+
 ## Three Core Models
 
 | Model | Purpose | When Created | Deleted? |
