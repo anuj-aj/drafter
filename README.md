@@ -9,10 +9,18 @@
 
 ## Agent Graph
 
-```
-Entry → Agent → Tool Call? → Yes → Execute Tool → back to Agent
-                  ↓ No
-                 End
+```mermaid
+graph TD
+    Start([Entry]) --> Agent["Agent Node<br/>(LLM + bind_tools)"]
+    Agent --> ShouldContinue{"should_continue<br/>tool_calls present?"}
+    ShouldContinue -->|Yes| Tools["Tools Node<br/>(propose_update)"]
+    ShouldContinue -->|No| End([END])
+    Tools --> Agent
+    
+    style Agent fill:#e1f5ff
+    style Tools fill:#f3e5f5
+    style ShouldContinue fill:#fff3e0
+    style End fill:#c8e6c9
 ```
 
 The LLM is bound to the `propose_update` tool. When called, it saves the proposal as a Draft in the database.
