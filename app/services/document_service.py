@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from app.db.models import Document, Revision
+from app.db.models import Document, Revision, InteractionLog
 from datetime import datetime
 from app.exceptions import DocumentNotFoundError, EmptyContentError
 from typing import Optional
@@ -27,9 +27,10 @@ def get_document(db: Session, document_id: str) -> Document:
     return doc
 
 
-def update_document(db: Session, document_id: str, new_content: str) -> Document:
+def update_document(db: Session, document_id: str, new_content: str, user_input: str = None, tool_used: str = None) -> Document:
     logger.info(f"Updating document {document_id} (version {get_document(db, document_id).version})")
     doc = get_document(db, document_id)
+    version_before = doc.version
 
     if not new_content.strip():
         logger.warning(f"Attempted update with blank content for document {document_id}")
@@ -53,6 +54,17 @@ def update_document(db: Session, document_id: str, new_content: str) -> Document
     db.refresh(doc)
     logger.info(f"Document {document_id} updated to version {doc.version}")
 
+    # Log interaction
+    interaction_log = InteractionLog(
+        document_id=doc.id,
+        user_input=user_input,
+        tool_used=tool_used,
+        version_before=version_before,
+        version_after=doc.version,
+        created_at=datetime.utcnow(),
+    )
+    db.add(interaction_log)
+    db.commit()
     return doc
 
 
@@ -69,7 +81,7 @@ def get_draft(db: Session, document_id: str) -> Optional[Draft]:
     return db.query(Draft).filter(Draft.document_id == document_id).first()
 
 
-def save_draft(db: Session, document_id: str, content: str) -> Draft:
+def save_draft(db: Session, document_id: str, content: str, user_input: str = None, tool_used: str = None) -> Draft:
     draft = get_draft(db, document_id)
     now = datetime.utcnow()
     if draft:
@@ -78,6 +90,17 @@ def save_draft(db: Session, document_id: str, content: str) -> Draft:
     else:
         draft = Draft(document_id=document_id, content=content, created_at=now, updated_at=now)
         db.add(draft)
+
+    # Log interaction
+    interaction_log = InteractionLog(
+        document_id=document_id,
+        user_input=user_input,
+        tool_used=tool_used,
+        version_before=None,
+        version_after=None,
+        created_at=now,
+    )
+    db.add(interaction_log)
 
     db.commit()
     db.refresh(draft)

@@ -39,4 +39,17 @@ class Draft(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
 
+
+# Audit table for logging interactions
+class InteractionLog(Base):
+    __tablename__ = "interaction_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"))
+    user_input = Column(Text)
+    tool_used = Column(String)  # Changed to String for tool name or identifier
+    version_before = Column(Integer)
+    version_after = Column(Integer)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
     document = relationship("Document")
