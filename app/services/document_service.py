@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from app.db.models import Document, Revision, InteractionLog
 from datetime import datetime
-from app.exceptions import DocumentNotFoundError, EmptyContentError
+from app.exceptions import DocumentNotFoundError, EmptyContentError, RevisionError
 from typing import Optional
 from app.db.models import Draft
 from sqlalchemy.exc import NoResultFound

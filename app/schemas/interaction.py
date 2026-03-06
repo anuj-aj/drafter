@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
+from typing import Any, Optional
 
 
 class InteractionRequest(BaseModel):
@@ -14,3 +15,7 @@ class InteractionRequest(BaseModel):
 
 class InteractionResponse(BaseModel):
     response: str
+
+    # Optional draft payload returned when a proposal exists.
+    # Kept flexible to avoid coupling clients to a rigid shape.
+    draft: Optional[dict[str, Any]] = None

@@ -24,8 +24,10 @@ def build_graph(db, document_id, document_content):
         RULES:
         - The Current document content below is the BASE for all edits.
         - If the user wants to update the document, you MUST call the propose_update tool with the FULL updated content.
+        - If the user asks to ADD additional information (append-style), prefer propose_append to avoid losing existing draft content.
         - IMPORTANT: Preserve all existing content and add the user's requested changes ON TOP of it.
         - Never drop or lose prior edits.
+        - If propose_update returns an error saying content was dropped or incomplete, you MUST try again and call propose_update with the FULL updated document text.
         - Never claim the document was updated unless you called the propose_update tool.
         - Never fabricate version numbers.
         - Proposals are saved as drafts; the user will confirm to finalize.

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from langchain_core.messages import HumanMessage, ToolMessage
 import logging
+import re
 
 from app.api.dependencies import get_db
 from app.schemas.interaction import InteractionRequest, InteractionResponse
@@ -17,6 +18,35 @@ from app.exceptions import (
 
 
 router = APIRouter(prefix="/documents", tags=["interaction"])
+
+logger = logging.getLogger(__name__)
+
+
+def _is_confirmation_input(user_input: str) -> bool:
+    """True only when the user is clearly confirming/applying a draft.
+
+    This avoids substring matches like "don't save" triggering an apply.
+    """
+    text = (user_input or "").strip().lower()
+    if not text:
+        return False
+
+    cleaned = re.sub(r"[^a-z0-9\s']+", " ", text)
+    tokens = [t for t in cleaned.split() if t]
+    if not tokens:
+        return False
+
+    confirmation_tokens = {"yes", "ok", "okay", "apply", "save", "confirm", "proceed"}
+    negation_tokens = {"no", "not", "dont", "don't", "never"}
+
+    if any(t in negation_tokens for t in tokens):
+        return False
+
+    if not any(t in confirmation_tokens for t in tokens):
+        return False
+
+    # Confirmations are typically short ("save", "yes", "yes save").
+    return len(tokens) <= 3
 
 
 @router.post("/{document_id}/interact", response_model=InteractionResponse)
@@ -40,10 +70,8 @@ def interact(document_id: str, payload: InteractionRequest, db: Session = Depend
     else:
         logger.info(f"No draft found; using current document content for {document_id}")
 
-    # Check if user is confirming the draft
-    user_input_lower = payload.user_input.lower().strip()
-    confirmation_keywords = {"yes", "ok", "apply", "save", "confirm", "proceed"}
-    is_confirmation = any(kw in user_input_lower for kw in confirmation_keywords)
+    # Check if user is confirming the draft (tight detection to avoid false positives)
+    is_confirmation = _is_confirmation_input(payload.user_input)
 
     if draft and is_confirmation:
         logger.info(f"Confirmation detected for document {document_id}; applying draft")
@@ -91,15 +119,21 @@ def interact(document_id: str, payload: InteractionRequest, db: Session = Depend
     if tool_called:
         logger.info(f"Tool call detected for document {document_id}")
 
-    # Also return draft info if present so client can show/inspect proposals
+    # Re-fetch the draft after agent run since propose_update persists it.
+    draft_after = get_draft(db, document_id)
+
+    # Also return draft info (the actual proposed content) if present so clients can display it.
     response = {"response": final_message.content}
-    if draft and tool_called:
+    if draft_after:
         response["draft"] = {
+            "draft_id": str(draft_after.id),
             "document_id": str(document_id),
-            "draft_content": draft.content,
-            "proposed_changes": "✓ Changes proposed and saved as draft. Say 'yes' or 'save' to confirm."
+            "content": draft_after.content,
+            "note": (
+                "✓ Proposal saved as draft. Say 'yes'/'save' to apply." if tool_called else "Draft exists for this document."
+            ),
         }
-        logger.info(f"Draft info included in response for document {document_id}")
+        logger.info(f"Draft content included in response for document {document_id}")
 
     return response
 

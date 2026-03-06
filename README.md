@@ -7,6 +7,10 @@
 2. User asks for more changes → Agent builds on the Draft
 3. User says "save" → Draft becomes permanent (creates **Revision**, increments **Document** version)
 
+Notes:
+- Drafts are persisted to the database when the agent calls a draft tool.
+- The live Document is only updated when the Draft is applied.
+
 ## Agent Graph
 
 ```mermaid
@@ -24,6 +28,9 @@ graph TD
 ```
 
 The LLM is bound to the `propose_update` tool. When called, it saves the proposal as a Draft in the database.
+
+For additive requests like “add more info about X”, the agent can use `propose_append` to safely append new material
+to the existing Draft (or Document if no Draft exists), avoiding accidental overwrites.
 
 ## Agent Graph (Full Data Flow)
 
@@ -67,19 +74,27 @@ POST   /documents/{id}/apply-update   → Commit draft to document
 GET    /documents/{id}/draft          → Fetch current draft
 ```
 
+### Response shape
+
+`POST /documents/{id}/interact` returns:
+- `response`: the assistant-facing message
+- `draft` (optional): the current working draft content (when a draft exists)
+
+Clients should render `draft.content` as the “current proposed document” because it is the accumulated working state.
+
 ## How It Works: 3-Step Example
 
 ```
 1. POST /documents/123/interact
    "Fix the grammar"
    → Draft created: "corrected text"
-   → Response shows proposal
+   → Response includes the latest Draft content
 
 2. POST /documents/123/interact
    "Add more detail"
    → Agent reads Draft, adds detail
    → Draft updated: "corrected text + detail"
-   → Response shows new proposal
+   → Response includes the updated Draft content
 
 3. POST /documents/123/interact
    "Yes, save it"
@@ -88,6 +103,8 @@ GET    /documents/{id}/draft          → Fetch current draft
    → Document.version++ (v1 → v2)
    → Draft deleted
    → Response: "Changes saved. Document updated to version 2."
+
+Confirmation detection is intentionally strict to avoid accidental applies. Prefer short confirmations like `save`, `apply`, or `yes`.
 ```
 
 ## Logging
@@ -98,7 +115,7 @@ All operations logged to console + `drafter.log`. Set `LOG_LEVEL=DEBUG` in `.env
 
 ```bash
 pip install -r requirements.txt
-# Configure .env (DATABASE_URL, LLM_PROVIDER, etc.)
+# Configure .env (DATABASE_URL,OPENAI_API_KEY, LLM_PROVIDER, etc.)
 uvicorn app.main:app --reload
 ```
 

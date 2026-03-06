@@ -1,7 +1,14 @@
 """LLM factory for selecting between different language model providers."""
 
 from app.config import settings
+from langchain_ollama import ChatOllama
 
+model = ChatOllama(
+    model=settings.ollama_model,
+    base_url=settings.ollama_base_url,
+    temperature=0,
+    timeout=30   # 30 seconds max
+)
 
 def get_llm_model():
     """Factory function to get the appropriate LLM based on settings.
