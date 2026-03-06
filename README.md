@@ -51,9 +51,11 @@ flowchart TB
    ProposeAppend --> DraftDB
 
    DraftDB --> InteractResp["Response includes draft.content"]
-   InteractResp --> End
+   InteractResp --> ConfirmInput(["User confirms: save/apply/yes"])
+   InteractResp --> MoreEdits(["User asks more edits"])
+   MoreEdits --> Interact
 
-   ConfirmInput(["User confirms: save/apply/yes"]) --> Apply["POST /documents/{id}/apply-update\n(or confirmation in /interact)"]
+   ConfirmInput --> Apply["POST /documents/{id}/apply-update\n(or confirmation in /interact)"]
    Apply --> ApplyDraft["apply_draft()"]
    ApplyDraft --> RevisionDB[(Revision Table)]
    ApplyDraft --> DocumentsDB[(Documents Table)]
