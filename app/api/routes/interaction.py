@@ -154,7 +154,17 @@ def apply_update(document_id: str, payload: dict, db: Session = Depends(get_db))
         logger.error(f"Failed to apply draft for document {document_id}: {e}", exc_info=True)
         raise InvariantViolationError(str(e)) from e
 
-    return {"status": "success", "new_version": updated.version}
+    return {
+        "status": "success",
+        "new_version": updated.version,
+        "response": f"Changes saved. Document updated to version {updated.version}.",
+        "document": {
+            "id": str(updated.id),
+            "title": updated.title,
+            "content": updated.content,
+            "version": updated.version,
+        },
+    }
 
 
 @router.get("/{document_id}/draft")

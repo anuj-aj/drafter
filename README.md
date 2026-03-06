@@ -78,16 +78,37 @@ flowchart TB
 ## API Endpoints
 
 ```
+POST   /documents                    → Create a new document
+GET    /documents/{id}               → Fetch a document
+PUT    /documents/{id}               → Replace live document content (optional)
 POST   /documents/{id}/interact       → Run agent, iterate on draft
 POST   /documents/{id}/apply-update   → Commit draft to document
 GET    /documents/{id}/draft          → Fetch current draft
 ```
+
+### Create document
+
+Create a document first to get an `id` you can use with `/interact`:
+
+```bash
+curl -X POST http://127.0.0.1:8000/documents \
+   -H "Content-Type: application/json" \
+   -d '{"title":"My Doc","content":"Initial content..."}'
+```
+
+Response includes the new document `id`.
 
 ### Response shape
 
 `POST /documents/{id}/interact` returns:
 - `response`: the assistant-facing message
 - `draft` (optional): the current working draft content (when a draft exists)
+
+`POST /documents/{id}/apply-update` returns:
+- `status`: `success` (or an error via HTTP status)
+- `new_version`: the updated document version
+- `response`: a short confirmation message
+- `document`: the updated document payload (includes `content`)
 
 Clients should render `draft.content` as the “current proposed document” because it is the accumulated working state.
 
@@ -162,4 +183,22 @@ uvicorn app.main:app --reload
 ```
 
 Done. The agent always works on the **Draft**, so changes stack cumulatively until you confirm.
+
+## Streamlit Frontend (optional)
+
+This repo includes a simple Streamlit UI that calls the same API endpoints.
+
+1) Start the API:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+2) Start Streamlit:
+
+```bash
+streamlit run streamlit_app.py
+```
+
+In the sidebar, set the API Base URL (default: `http://127.0.0.1:8000`), then create/load a document and use **Interact** / **Apply**.
 
