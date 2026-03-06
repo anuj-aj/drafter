@@ -10,6 +10,8 @@
 Notes:
 - Drafts are persisted to the database when the agent calls a draft tool.
 - The live Document is only updated when the Draft is applied.
+- This project relies on LLM tool-calling (function calling) for `propose_update` / `propose_append`.
+   If your provider/model does not support tool calls, the agent may respond in text but no Draft will be saved.
 
 ## Agent Graph
 
@@ -17,7 +19,7 @@ Notes:
 graph TD
     Start([Entry]) --> Agent["Agent Node<br/>(LLM + bind_tools)"]
     Agent --> ShouldContinue{"should_continue<br/>tool_calls present?"}
-    ShouldContinue -->|Yes| Tools["Tools Node<br/>(propose_update)"]
+   ShouldContinue -->|Yes| Tools["Tools Node<br/>(propose_update / propose_append)"]
     ShouldContinue -->|No| End([END])
     Tools --> Agent
     
@@ -36,26 +38,31 @@ to the existing Draft (or Document if no Draft exists), avoiding accidental over
 
 ```mermaid
 flowchart TB
-    UserInput([User Input]) --> AgentNode["Agent Node (LLM + Tools)"]
-    AgentNode --> ShouldContinue{Tool Call?}
-    ShouldContinue -- No --> End([End / Return Response])
-    ShouldContinue -- Yes --> ToolsNode["Tools Node"]
-    ToolsNode --> ProposeUpdate["propose_update\n(Non-destructive)"]
-    ToolsNode --> UpdateTool["update\n(Destructive, only on apply)"]
-    ProposeUpdate --> DraftDB[(Draft Table)]
-    UpdateTool --> RevisionDB[(Revision Table)]
-    UpdateTool --> DraftDB
-    ProposeUpdate -.-> AgentNode
-    UpdateTool -.-> AgentNode
-    DraftDB -.-> DocumentsDB[(Documents Table)]
-    RevisionDB -.-> DocumentsDB
-    UpdateTool --> DocumentsDB
-    DocumentsDB -.-> AgentNode
-    End:::endstyle
+   UserInput([User Input]) --> Interact["POST /documents/{id}/interact"]
+   Interact --> AgentNode["Agent Node (LLM + Tools)"]
+   AgentNode --> ShouldContinue{Tool Call?}
+   ShouldContinue -- No --> End([End / Return Response])
+   ShouldContinue -- Yes --> ToolsNode["Tools Node"]
 
-    classDef tool fill:#f3e5f5;
-    class ProposeUpdate,UpdateTool tool;
-    classDef endstyle fill:#c8e6c9,stroke:#333,stroke-width:2;
+   ToolsNode --> ProposeUpdate["propose_update\n(FULL document rewrite)\nNon-destructive"]
+   ToolsNode --> ProposeAppend["propose_append\n(Append-only)\nNon-destructive"]
+
+   ProposeUpdate --> DraftDB[(Draft Table)]
+   ProposeAppend --> DraftDB
+
+   DraftDB --> InteractResp["Response includes draft.content"]
+   InteractResp --> End
+
+   ConfirmInput(["User confirms: save/apply/yes"]) --> Apply["POST /documents/{id}/apply-update\n(or confirmation in /interact)"]
+   Apply --> ApplyDraft["apply_draft()"]
+   ApplyDraft --> RevisionDB[(Revision Table)]
+   ApplyDraft --> DocumentsDB[(Documents Table)]
+   ApplyDraft --> DraftDeleted["Draft deleted"]
+   DraftDeleted --> End:::endstyle
+
+   classDef tool fill:#f3e5f5;
+   class ProposeUpdate,ProposeAppend tool;
+   classDef endstyle fill:#c8e6c9,stroke:#333,stroke-width:2;
 ```
 
 ## Three Core Models
@@ -63,7 +70,7 @@ flowchart TB
 | Model | Purpose | When Created | Deleted? |
 |-------|---------|--------------|----------|
 | **Document** | Live version (id, title, content, version) | First | Never |
-| **Draft** | In-progress proposal | Agent calls `propose_update` | On apply |
+| **Draft** | In-progress proposal | Agent calls `propose_update` / `propose_append` | On apply |
 | **Revision** | Historical snapshot | When Draft is applied | Never |
 
 ## API Endpoints
@@ -115,7 +122,40 @@ All operations logged to console + `drafter.log`. Set `LOG_LEVEL=DEBUG` in `.env
 
 ```bash
 pip install -r requirements.txt
-# Configure .env (DATABASE_URL,OPENAI_API_KEY, LLM_PROVIDER, etc.)
+# Configure .env (DATABASE_URL, OPENAI_API_KEY, LLM_PROVIDER, etc.)
+uvicorn app.main:app --reload
+```
+
+### LLM Provider note
+
+The agent workflow depends on tool binding. In this repo, **OpenAI is the supported/reliable provider for tool-calling**.
+Ollama tool-calling support depends on the model + integration and may be unreliable; if tool calls are not emitted,
+Draft updates won’t persist.
+
+## Docker (DB + Ollama)
+
+The included docker compose file starts:
+- **Postgres** on `localhost:5432`
+- **Ollama** on `localhost:11434`
+
+```bash
+docker compose up -d
+```
+
+Example `.env` values when using docker compose:
+- `DATABASE_URL=postgresql+psycopg2://drafter:drafter@localhost:5432/drafter`
+
+If using **OpenAI** (recommended for tool-calling):
+- `LLM_PROVIDER=openai`
+- `OPENAI_API_KEY=...`
+
+If using **Ollama** (may not support tool calls for your model):
+- `LLM_PROVIDER=ollama`
+- `OLLAMA_BASE_URL=http://localhost:11434`
+
+Then run the API with:
+
+```bash
 uvicorn app.main:app --reload
 ```
 
